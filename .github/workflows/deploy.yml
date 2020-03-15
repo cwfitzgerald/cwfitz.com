@@ -12,6 +12,6 @@ jobs:
         run: |
           mkdir -p ~/.ssh/
           echo "$SSH_KEY" > ~/.ssh/id_rsa
-          ./upload.bash
+          rsync -r -z --delete --chmod u=rwX,go=rX -e "ssh -i ~/.ssh/id_rsa" --progress $(cat files) connor@cwfitz.com:/var/www/cwfitz
         env:
           SSH_KEY: ${{ secrets.SSH_KEY }}
