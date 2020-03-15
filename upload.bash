@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-scp -r $(cat files | tr -d '\r') cwfitz.com:/var/www/cwfitz
+rsync -r -z --delete --chmod u=rwX,go=rX --progress $(cat files) connor@cwfitz.com:/var/www/cwfitz
