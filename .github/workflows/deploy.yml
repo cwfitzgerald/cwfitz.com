@@ -12,6 +12,7 @@ jobs:
         run: |
           mkdir -p ~/.ssh/
           echo "$SSH_KEY" > ~/.ssh/id_rsa
-          rsync -r -z --delete --chmod u=rwX,go=rX -e "ssh -i ~/.ssh/id_rsa -oStrictHostKeyChecking=no" --progress $(cat files) connor@cwfitz.com:/var/www/cwfitz
+          chmod 600 ~/.ssh/id_rsa
+          rsync -r -z --delete --chmod u=rwX,go=rX -e "ssh -i ~/.ssh/id_rsa -oStrictHostKeyChecking=accept-new" --progress $(cat files) connor@cwfitz.com:/var/www/cwfitz
         env:
           SSH_KEY: ${{ secrets.SSH_KEY }}
