@@ -12,6 +12,6 @@ jobs:
         run: |
           mkdir -p ~/.ssh/
           echo "$SSH_KEY" > ~/.ssh/id_rsa
-          ./upload
+          ./upload.bash
         env:
           SSH_KEY: ${{ secrets.SSH_KEY }}
