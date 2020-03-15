@@ -1,2 +1,2 @@
 #!/usr/bin/env fish
-rsync -az --progress (cat files) cwfitz.com:/var/www/cwfitz
+rsync -r -z --delete --chmod u=rwX,go=rX --progress (cat files) cwfitz.com:/var/www/cwfitz
