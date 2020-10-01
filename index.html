@@ -24,9 +24,10 @@
                 <p>(Connor W. Fitzgerald)</p>
 
                 <h5>I am a self-taught systems programmer building programs for fun.</h5>
-                <h5>I like Hardware, High-Performance Software, and Transportation (i.e. Trains).</h5>
+                <h5>I like Graphics, High-Performance Software, and Transportation(i.e. Trains).</h5>
                 <h5>This is my website.</h5>
-                <h5><a href="https://github.com/cwfitzgerald">Github</a> &bullet;
+                <h5>
+                    <a href="https://github.com/cwfitzgerald">Github</a> &bullet;
                     <a href="https://www.linkedin.com/in/cwfitz/">Linkedin</a> &bullet;
                     <a href="javascript:void(0)" onclick="alert('connorwadefitzgerald (at) gmail (dot) com')">Email</a> &bullet;
                     <a href="cv.pdf">Resume</a>
@@ -41,9 +42,54 @@
                 <hr/>
 
                 <!-- To adjust the intra-section spacing, adjust the bottom margin of the above object-->
+                <a href="https://github.com/cwfitzgerald/capstone"><h3 class="mt-3 mb-0">rend3</h3>
+                <p class="mb-1">Github</p></a>
+                <a href="images/rend3.jpg"><img src="images/rend3.jpg" class="img-fluid col-10 mt-1 mb-2"></a>
+                <p>
+                    Standalone renderer library designed to use the most modern gpu features. Fully gpu-based pipeline,
+                    using Descriptor Indexing, GPU Object Culling, and Clustered Forward Lighting.
+                    <br>
+                    My capstone/graduation project. Started in September 2020.
+                </p><p>
+                    <h5><u>As of 2020-10-01, the following things are implemented:</u></h5>
+                    <ul>
+                        <li>Reverse Infinite Depth</li>
+                        <li>Bindless Materials</li>
+                        <li>GPU Frustum Culling</li>
+                        <li>Use of Multi-Draw Indirect</li>
+                    </ul>
+
+                    <h5><u>The following things are in the works:</u></h5>
+
+                    <ul>
+                        <li>Clustered Forward Lighting w/ GPU Culling</li>
+                        <li>Cascading Shadow Maps</li>
+                        <li>Reflection/Global Illumination Probes</li>
+                        <li>Physically Based Lighting</li>
+                        <li>Screen Space Ambient Occlusion</li>
+                        <li>Screen Space Reflections</li>
+                        <li>Animation & Skinning</li>
+                    </ul>
+                </p>
+
+                <hr/>
+
+                <!-- To adjust the intra-section spacing, adjust the bottom margin of the above object-->
                 <a href="https://bvereborn.com"><h3 class="mt-3 mb-0">BVE-Reborn</h3></a>
                 <p class="mb-1"><a href="https://github.com/BVE-Reborn/bve-reborn">Github</a></p>
-                <p>Open Source Train Simulator. Rewrite of <a href="https://openbve-project.net">OpenBVE</a> in Rust and wgpu.</p>
+                <a href="images/bve.jpg"><img src="images/bve.jpg" class="img-fluid col-10 mt-1 mb-2"></a>
+                <p>
+                    Open Source Train Simulator. Rewrite of <a href="https://openbve-project.net">OpenBVE</a> in Rust and wgpu.
+                    Renderer features Order Independent Transparency, Clustered Forward Lighting, and GPU Light Culling.
+
+                    <h5><u>Renderer features:</u></h5>
+                    <ul>
+                        <li>Reverse Infinite Depth</li>
+                        <li>Order Independent Transparency</li>
+                        <li>Clustered Forward Lighting</li>
+                        <li>GPU Light Culling</li>
+                    </ul>
+                </p>
 
                 <hr/>
 
@@ -52,7 +98,8 @@
                 <p>
                     Safe Rendering API in Rust. Serves as WebGPU implementation for both Firefox and Rust.
                     <br>
-                    I help with extensions and making the Rust experience better.
+                    I've added extensions for Descriptor Indexing, Multi-Draw Indirect, and more. I've
+                    also worked on making the Rust experience better.
                 </p>
 
                 <hr/>
