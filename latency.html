@@ -616,8 +616,8 @@ function render(){
       g += `<rect x="${X(a)}" y="${y}" width="${Math.max(X(b)-X(a),1)}" height="6" rx="1" fill="${fill(f.i)}" ${dropped ? 'opacity=".35"' : ''}/>`;
     });
     if (comp && f.shown && f.rel < end){
-      // the compositor latches the frame at a vblank and holds it for whole refreshes; scanout follows one refresh later
-      g += box('dwm', f.rel, Math.min(Number.isFinite(f.off) ? f.off - T : end, end), f);
+      // the compositor runs once per refresh: one block for each refresh that it composes this frame; scanout follows one refresh later
+      for (let t = f.rel, stop = Math.min(Number.isFinite(f.off) ? f.off - T : end, end); t < stop - 1e-6; t += T) g += box('dwm', t, Math.min(t + T, end) - 1/px, f);
     }
     if (extra[f.i]) g += extra[f.i];
     // image ownership: from when the image is usable by this frame until it is given back
