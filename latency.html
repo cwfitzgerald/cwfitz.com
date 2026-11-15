@@ -1,0 +1,807 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Swapchain Frame Queue</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: controls, figures, timeline. Plain and readable. */
+:root{
+  --bg:#ffffff; --fg:#1f2328; --muted:#656d76; --border:#d0d7de; --grid:#eaeef2; --accent:#0969da; --warn:#bc4c00; --btn:#f6f8fa;
+  /* frame hues: Paul Tol "light" scheme (CVD-safe), ordered so neighbouring frames also differ in lightness */
+  --f0:#77AADD; --f1:#EE8866; --f2:#EEDD88; --f3:#FFAABB; --f4:#44BB99; --f5:#99DDFF; --seg-text:#1f2328;
+  --font:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0d1117; --fg:#e6edf3; --muted:#8d96a0; --border:#30363d; --grid:#1c2128; --accent:#4493f8; --warn:#f0883e; --btn:#161b22;
+  --f0:color-mix(in srgb,#77AADD 50%,#0d1117); --f1:color-mix(in srgb,#EE8866 50%,#0d1117); --f2:color-mix(in srgb,#EEDD88 50%,#0d1117); --f3:color-mix(in srgb,#FFAABB 50%,#0d1117); --f4:color-mix(in srgb,#44BB99 50%,#0d1117); --f5:color-mix(in srgb,#99DDFF 50%,#0d1117); --seg-text:#f0f3f6; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0d1117; --fg:#e6edf3; --muted:#8d96a0; --border:#30363d; --grid:#1c2128; --accent:#4493f8; --warn:#f0883e; --btn:#161b22;
+  --f0:color-mix(in srgb,#77AADD 50%,#0d1117); --f1:color-mix(in srgb,#EE8866 50%,#0d1117); --f2:color-mix(in srgb,#EEDD88 50%,#0d1117); --f3:color-mix(in srgb,#FFAABB 50%,#0d1117); --f4:color-mix(in srgb,#44BB99 50%,#0d1117); --f5:color-mix(in srgb,#99DDFF 50%,#0d1117); --seg-text:#f0f3f6; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:14px;line-height:1.4;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 32px}
+.page{max-width:1400px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+h1{font-size:20px;font-weight:600;margin:0}
+.controls{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(200px,100%),1fr));gap:16px 24px}
+.ctl{display:flex;flex-direction:column;gap:6px;min-width:0}
+.ctl .lbl{display:flex;justify-content:space-between;gap:8px;font-size:13px;color:var(--muted)}
+.ctl output{color:var(--fg);font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;margin:0;accent-color:var(--accent)}
+.seg{display:flex;flex-wrap:wrap;gap:4px}
+.seg button{font:inherit;font-size:13px;padding:4px 10px;border:1px solid var(--border);background:var(--btn);color:var(--fg);border-radius:6px;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:#fff}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.note{font-size:12px;color:var(--muted)}
+.credit{align-self:flex-end;text-align:right;font-size:12px;color:var(--muted)}
+.lanes .skipped{color:var(--muted);font-weight:400}
+.figures{overflow-x:auto}
+table{border-collapse:collapse;font-variant-numeric:tabular-nums;min-width:100%}
+th,td{padding:6px 12px;text-align:right;border-bottom:1px solid var(--grid);white-space:nowrap}
+th{font-weight:500;color:var(--muted);font-size:13px;border-bottom-color:var(--border)}
+th:first-child,td:first-child{text-align:left;padding-left:0}
+td:first-child{white-space:normal}
+td.typ{font-weight:600}
+.readout{margin-bottom:10px;font-variant-numeric:tabular-nums}
+.readout summary{cursor:pointer;font-size:13px;color:var(--muted);padding:4px 0}
+.readout summary b{color:var(--fg);font-weight:600}
+.readout table{min-width:0;margin:4px 0 4px 16px}
+.readout td,.readout th{padding:4px 12px;font-size:13px}
+.readout td.lat{color:var(--accent);font-weight:600}
+.readout td.dim{color:var(--muted)}
+.tl-wrap{display:flex;min-width:0;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.lanes{flex:none;width:84px;border-right:1px solid var(--border)}
+.lanes div{display:flex;align-items:center;padding:0 10px;box-sizing:border-box;font-size:13px;font-weight:500}
+.scroller{overflow-x:auto;min-width:0;flex:1}
+svg{display:block}
+svg text{font-family:var(--font);fill:var(--muted);font-size:11px}
+.fr{cursor:pointer;transition:opacity .1s}
+.scroller,.scroller *{-webkit-tap-highlight-color:transparent}
+.tl{outline:none;-webkit-user-select:none;user-select:none}
+.fr text{fill:var(--seg-text);font-size:11px;pointer-events:none}
+.tl.focus .fr{opacity:.2}
+.tl.focus .fr.on{opacity:1}
+.lane-note{transition:opacity .1s}
+.tl.focus .lane-note{opacity:.2}
+.tick{stroke:var(--muted);stroke-width:1;opacity:.6}
+.fr.on .tick{stroke:var(--accent);stroke-width:2;opacity:1}
+@media (prefers-reduced-motion:reduce){.fr{transition:none}}
+</style>
+
+<style>
+[hidden]{display:none!important}
+.group-lbl{grid-column:1/-1;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:-6px}
+.seg button:disabled{opacity:.4;cursor:not-allowed;text-decoration:line-through}
+.figures{display:flex;flex-direction:column;gap:8px}
+.groups{display:grid;gap:16px}
+@media (min-width:1100px){.groups{grid-template-columns:1fr 2fr 1fr}}
+.group{border:1px solid var(--border);border-radius:6px;padding:12px 14px;align-content:start}
+.resolved ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:3px;font-size:13px}
+/* Lane key: opens beside the lane label that the reader points at or selects, 8px right of the 84px lane column. */
+.lanes button{font:inherit;color:inherit;background:none;border:0;margin:0 -10px;padding:0 10px;width:calc(100% + 20px);height:100%;text-align:left;cursor:help;text-decoration:underline dotted var(--muted);text-underline-offset:3px}
+.lanes button:focus-visible{outline-offset:-2px}
+.tl-box{position:relative}
+.lane-key{position:absolute;left:92px;transform:translateY(-50%);z-index:1;box-sizing:border-box;max-width:min(420px,calc(100% - 100px));display:flex;flex-direction:column;gap:6px;padding:8px 12px;font-size:13px;background:var(--bg);border:1px solid var(--border);border-radius:6px;box-shadow:0 4px 12px rgb(0 0 0/.2)}
+.lane-key svg{display:inline-block;vertical-align:-2px;margin-right:6px}
+.resolved li{overflow-wrap:anywhere}
+.resolved li.assume{color:var(--muted)}
+.resolved li.assume b{color:var(--fg);font-weight:600}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}
+.head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 16px}
+/* Explanation slots. Text comes from the #explain template. */
+.help{margin:0;font-size:13px;color:var(--muted);max-width:70ch}
+.help:empty,.page:not(.explain) .help{display:none}
+.help>:first-child{margin-top:0}
+.help>:last-child{margin-bottom:0}
+.draft{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;border:1px dashed var(--border);border-radius:4px;padding:1px 5px}
+.controls>.help{grid-column:1/-1}
+.timeline{display:flex;flex-direction:column;gap:8px}
+.timeline .readout{margin:0}
+/* Stack: the children share one grid cell and only one shows, so a change of the shown child does not move the layout. */
+.stack{display:grid;min-width:0}
+.stack>*{grid-area:1/1;min-width:0}
+.stack>.off{visibility:hidden}
+/* Tall cells take two grid rows, so a short cell in the same row does not leave a gap above the next one. */
+.tall{grid-row:span 2}
+.pair{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));align-content:start;gap:16px}
+/* Present modes: FIFO modes in one column, the others in the next. */
+.pm-row{display:flex;gap:8px}
+.pm-row .seg{flex-direction:column;flex-wrap:nowrap}
+.pm-row button{text-align:left;white-space:nowrap}
+/* Phone: the chart stays at the bottom of the screen while the controls scroll above it. */
+@media (max-width:700px) and (orientation:portrait){
+  .timeline{display:contents}
+  .tl-box{position:sticky;bottom:0;z-index:1;margin-inline:-16px;padding:8px 16px max(8px,env(safe-area-inset-bottom,0px));background:var(--bg);border-top:1px solid var(--border)}
+  .lane-key{left:108px;max-width:calc(100% - 124px);transform:translateY(-100%);margin-top:-14px}
+  html{scroll-padding-bottom:350px}
+}
+@media (pointer:coarse){
+  .seg button{padding:8px 12px;min-width:40px}
+  .pair .seg button{min-width:0;padding-inline:10px}
+  input[type=range]{height:32px}
+  .readout summary{padding-block:10px}
+}
+</style>
+
+<!-- Explanations. Write HTML in a slot. An empty slot does not show.
+     Open the page with ?draft to see where each empty slot goes. -->
+<template id="explain">
+  <div data-for="intro"></div>
+
+  <div data-for="scenarios"></div>
+  <!-- Shown while that scenario is loaded. The key is the first field of its PRESETS entry. -->
+  <div data-for="preset-baseline"></div>
+  <div data-for="preset-shallow-queue"></div>
+  <div data-for="preset-input-before-wait"></div>
+  <div data-for="preset-cpu-bound"></div>
+  <div data-for="preset-gpu-bound"></div>
+  <div data-for="preset-mailbox"></div>
+  <div data-for="preset-tearing"></div>
+  <div data-for="preset-composed"></div>
+
+  <div data-for="app"></div>
+  <div data-for="input-sampled"></div>
+  <div data-for="cpu"></div>
+  <div data-for="gpu"></div>
+
+  <div data-for="swapchain"></div>
+  <div data-for="interface"></div>
+  <div data-for="api"></div>
+  <div data-for="latency"></div>
+  <div data-for="waitable"></div>
+  <div data-for="buffers"></div>
+  <div data-for="vk-images"></div>
+  <div data-for="metal-drawables"></div>
+  <div data-for="present-mode"></div>
+  <!-- Shown while that present mode is selected. -->
+  <div data-for="pm-fifo"></div>
+  <div data-for="pm-relaxed"></div>
+  <div data-for="pm-latest"></div>
+  <div data-for="pm-mailbox"></div>
+  <div data-for="pm-immediate"></div>
+
+  <div data-for="display"></div>
+  <div data-for="refresh"></div>
+  <div data-for="presentation"></div>
+  <div data-for="span"></div>
+
+  <div data-for="timeline"></div>
+  <!-- One per timeline lane, shown in the key of that lane. The key is the lane label in lowercase.
+       The last three are the same lane on each API. -->
+  <div data-for="lane-vsync"></div>
+  <div data-for="lane-latency"></div>
+  <div data-for="lane-input"></div>
+  <div data-for="lane-cpu"></div>
+  <div data-for="lane-gpu"></div>
+  <div data-for="lane-queue"></div>
+  <div data-for="lane-compositor"></div>
+  <div data-for="lane-display"></div>
+  <div data-for="lane-buffers"></div>
+  <div data-for="lane-images"></div>
+  <div data-for="lane-drawables"></div>
+
+  <div data-for="results"></div>
+  <div data-for="result-latency"></div>
+  <div data-for="result-read"></div>
+  <div data-for="result-displayed"></div>
+  <div data-for="result-rendered"></div>
+  <div data-for="result-discarded"></div>
+  <div data-for="result-cpu"></div>
+  <div data-for="result-gpu"></div>
+
+  <div data-for="resolved"></div>
+</template>
+
+<div class="page" id="page">
+  <header class="head">
+    <h1>Swapchain Frame Queue</h1>
+    <div class="seg"><button id="explainBtn">Explanations</button></div>
+  </header>
+  <div class="help" data-explain="intro"></div>
+
+  <section class="controls" aria-label="Scenarios">
+    <div class="group-lbl">Scenarios</div>
+    <div class="help" data-explain="scenarios"></div>
+    <div class="ctl" style="grid-column:1/-1"><div class="seg" id="presetSeg"></div>
+      <div class="help stack" id="presetHelp"></div></div>
+  </section>
+
+  <div class="groups">
+    <section class="controls group" aria-label="App">
+      <div class="group-lbl">App</div>
+      <div class="help" data-explain="app"></div>
+      <div class="ctl"><span class="lbl">Input sampled</span>
+      <div class="seg" id="inSeg"><button data-v="before">Before wait</button><button data-v="after">After wait</button></div>
+      <div class="help" data-explain="input-sampled"></div></div>
+      <div class="ctl"><label class="lbl" for="cpu">CPU time <output id="cpuOut"></output></label>
+      <input id="cpu" type="range" min="0.5" max="50" step="0.1">
+      <div class="help" data-explain="cpu"></div></div>
+      <div class="ctl"><label class="lbl" for="gpu">GPU time <output id="gpuOut"></output></label>
+      <input id="gpu" type="range" min="0.5" max="50" step="0.1">
+      <div class="help" data-explain="gpu"></div></div>
+    </section>
+
+    <section class="controls group" aria-label="Swapchain">
+      <div class="group-lbl">Swapchain</div>
+      <div class="help" data-explain="swapchain"></div>
+      <div class="ctl"><span class="lbl">Interface</span>
+      <div class="seg" id="ifSeg"><button data-v="wgpu">wgpu</button><button data-v="native">Native API</button></div>
+      <div class="help" data-explain="interface"></div></div>
+      <div class="ctl"><span class="lbl">API</span>
+      <div class="seg" id="apiSeg"><button data-v="dx12">DX12</button><button data-v="vk">Vulkan</button><button data-v="metal">Metal</button></div>
+      <div class="help" data-explain="api"></div></div>
+      <div class="stack tall">
+      <div class="ctl" id="kL"><span class="lbl">Max frame latency</span>
+      <div class="seg" id="LSeg"><button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="4">4</button><button data-v="5">5</button><button data-v="6">6</button></div>
+      <span class="note"><code>desired_maximum_frame_latency</code></span>
+      <div class="help" data-explain="latency"></div></div>
+      <div class="pair" id="kDx"><div class="ctl" id="kN"><span class="lbl">Waitable count</span>
+      <div class="seg" id="nSeg"><button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="4">4</button></div>
+      <div class="help" data-explain="waitable"></div></div>
+      <div class="ctl" id="kB"><span class="lbl">Buffer count</span>
+      <div class="seg" id="bSeg"><button data-v="2">2</button><button data-v="3">3</button><button data-v="4">4</button><button data-v="5">5</button></div>
+      <div class="help" data-explain="buffers"></div></div></div>
+      <div class="ctl" id="kVk"><span class="lbl"><span>Requested images (<code>minImageCount</code>)</span></span>
+      <div class="seg" id="vkReqSeg"><button data-v="3">3</button><button data-v="4">4</button><button data-v="5">5</button></div>
+      <div class="help" data-explain="vk-images"></div></div>
+      <div class="ctl" id="kMtl"><span class="lbl"><code>maximumDrawableCount</code></span>
+      <div class="seg" id="mtlSeg"><button data-v="2">2</button><button data-v="3">3</button></div>
+      <div class="help" data-explain="metal-drawables"></div></div>
+      </div>
+      <div class="ctl tall"><span class="lbl">Present mode</span>
+      <div class="pm-row" id="pmSeg">
+        <div class="seg"><button data-v="fifo">FIFO</button><button data-v="relaxed">FIFO relaxed</button><button data-v="latest">FIFO latest ready</button></div>
+        <div class="seg"><button data-v="mailbox">Mailbox</button><button data-v="immediate">Immediate</button></div>
+      </div>
+      <div class="help" data-explain="present-mode"></div>
+      <div class="help stack" id="pmHelp"></div></div>
+    </section>
+
+    <section class="controls group" aria-label="Display">
+      <div class="group-lbl">Display</div>
+      <div class="help" data-explain="display"></div>
+      <div class="ctl"><label class="lbl" for="hz">Refresh rate <output id="hzOut"></output></label>
+      <input id="hz" type="range" min="24" max="240" step="1">
+      <div class="help" data-explain="refresh"></div></div>
+      <div class="ctl"><span class="lbl">Presentation</span>
+      <div class="seg" id="modeSeg"><button data-v="iflip">Direct to display</button><button data-v="dwm">Composed</button></div>
+      <div class="help" data-explain="presentation"></div></div>
+      <div class="ctl"><label class="lbl" for="span">Visible span <output id="spanOut"></output></label>
+        <input id="span" type="range" min="6" max="48" step="1">
+        <div class="help" data-explain="span"></div></div>
+    </section>
+  </div>
+
+  <section class="timeline" aria-label="Timeline">
+    <div class="help" data-explain="timeline"></div>
+    <div class="tl-box">
+      <div class="tl-wrap">
+        <div class="lanes" id="lanes"></div>
+        <div class="scroller" id="scroller"></div>
+      </div>
+      <div class="lane-key" id="laneKey" hidden></div>
+    </div>
+    <details class="readout" id="readoutBox"><summary id="readoutSum"></summary><div style="overflow-x:auto"><table><thead><tr><th>Event</th><th>Time (ms)</th><th>Since input read (ms)</th></tr></thead><tbody id="readout"></tbody></table></div></details>
+  </section>
+
+  <section class="figures" aria-label="Results">
+    <div class="group-lbl">Results</div>
+    <div class="help" data-explain="results"></div>
+    <table><tbody id="chars"></tbody></table>
+  </section>
+
+  <section class="figures resolved" aria-label="Resolved configuration">
+    <div class="group-lbl">Resolved configuration</div>
+    <div class="help" data-explain="resolved"></div>
+    <ul id="resolved"></ul>
+  </section>
+
+  <footer class="credit">LLM assisted visualization. All words human written</footer>
+</div>
+
+<script>
+const DEFAULTS = {api:'dx12', iface:'wgpu', L:2, n:2, bufs:3, vkReq:3, mtl:3,
+  hz:60, cpu:6, gpu:9, span:16, mode:'iflip', pm:'fifo', input:'after', explain:true};
+const S = {...DEFAULTS, hover:null, pin:null};
+// Scenarios: slot key, button label, settings that differ from the defaults.
+// Settings that a scenario match ignores: the native count controls have no effect through wgpu.
+const NOT_PRESET = ['explain','n','bufs','vkReq','mtl'];
+const PRESETS = [
+  ['baseline', 'Baseline', {}],
+  ['shallow-queue', 'Shallow queue', {L:1}],
+  ['input-before-wait', 'Input before wait', {input:'before'}],
+  ['cpu-bound', 'CPU bound', {cpu:20}],
+  ['gpu-bound', 'GPU bound', {gpu:20}],
+  ['mailbox', 'Mailbox', {api:'vk', pm:'mailbox', cpu:2, gpu:3}],
+  ['tearing', 'Tearing', {pm:'immediate'}],
+  ['composed', 'Composed', {mode:'dwm'}],
+];
+try { Object.assign(S, JSON.parse(localStorage.getItem('swq4')||'{}')); } catch(e){}
+S.hover = null; S.pin = null;
+const HUES = 6, VK_MAX_IMAGES = 8, VK_DEVICE_MIN = 3;
+const $ = id => document.getElementById(id);
+// Explanation HTML for a slot of the #explain template. With ?draft, an empty slot shows its name.
+const DRAFT = new URLSearchParams(location.search).has('draft');
+const explain = k => {
+  const e = $('explain').content.querySelector(`[data-for="${k}"]`), h = e ? e.innerHTML.trim() : '';
+  return h || (DRAFT ? `<span class="draft">explain: ${k}</span>` : '');
+};
+const fmt = (v,d=1) => Number.isFinite(v) ? v.toFixed(d) : '—';
+const clamp = (v,a,b) => Math.min(Math.max(v,a),b);
+const isVk = () => S.api==='vk';
+const API_LABEL = {dx12:'DX12', vk:'Vulkan', metal:'Metal'};
+// A layered slot holds one explanation for each key in one grid cell, so its height is the same for every key.
+const layers = (id, prefix, keys) => { if (keys.some(k=>explain(prefix+k))) $(id).innerHTML = keys.map(k=>`<div data-k="${k}">${explain(prefix+k)}</div>`).join(''); };
+const layer = (id, k) => [...$(id).children].forEach(e=>e.classList.toggle('off', e.dataset.k!==k));
+const PM_LABEL = {fifo:'FIFO', relaxed:'FIFO relaxed', latest:'FIFO latest ready', mailbox:'Mailbox', immediate:'Immediate'};
+const IMG_WORD = {dx12:'buffer', vk:'image', metal:'drawable'};
+const IMG_LANE = {dx12:'Buffers', vk:'Images', metal:'Drawables'};
+// Composed presentation cannot tear: the compositor takes the newest ready frame at each vblank latch.
+const effPm = () => S.mode!=='dwm' ? S.pm : S.pm==='immediate' ? 'latest' : S.pm==='relaxed' ? 'fifo' : S.pm;
+
+// 1 = available, 2 = optional (driver-dependent), 0/undefined = not available
+function availability(){
+  if (S.api==='dx12') return {fifo:1, latest:1, immediate:1};
+  if (isVk()) return {fifo:1, relaxed:2, mailbox:2, immediate:2, latest: S.iface==='wgpu' ? 0 : 2};
+  return {fifo:1, immediate:1};
+}
+
+// Turns the chosen API, interface and knobs into the three throttles the sim understands:
+//   N           latency semaphore (DXGI waitable), released when a frame retires
+//   fenceGate   CPU waits for frame i-B's GPU work before acquiring
+//   imgGate     who waits for a free image: 'cpu' (blocking acquire) or 'gpu' (semaphore wait)
+function resolve(){
+  const api = S.api, wg = S.iface==='wgpu', vk = isVk(), pm = S.pm;
+  const lines = [], assume = [], c = s => `<code>${s}</code>`;
+  let N = null, B, imgGate, fenceGate = false;
+  if (api==='dx12'){
+    if (wg){
+      N = clamp(S.L,1,16); B = Math.min(N+1,16);
+      lines.push(c(`desired_maximum_frame_latency = ${S.L}`));
+      lines.push(`→ ${c(`SetMaximumFrameLatency(${N})`)}, ${B} buffers (latency + 1)`);
+      lines.push(`→ CPU waits on the frame-latency waitable before each frame (${c('Dx12UseFrameLatencyWaitableObject::Wait')}, the default)`);
+    } else {
+      N = S.n; B = S.bufs;
+      lines.push(`${c(`SetMaximumFrameLatency(${N})`)}, ${B} buffers`);
+      lines.push(`→ CPU waits on the frame-latency waitable before each frame`);
+    }
+    lines.push(`→ If no buffer is free, the GPU waits for one; the CPU is not blocked`);
+    imgGate = 'gpu';
+  } else if (vk){
+    const lo = VK_DEVICE_MIN, hi = VK_MAX_IMAGES; let req;
+    if (wg){
+      const L = clamp(S.L, lo-1, hi-1); req = L+1;
+      lines.push(c(`desired_maximum_frame_latency = ${S.L}`) + (L!==S.L ? ` → clamped to ${L} (device ${c('minImageCount')} is ${lo})` : ''));
+      lines.push(`→ ${c(`minImageCount = ${req}`)} (latency + 1)`);
+    } else {
+      req = clamp(S.vkReq, lo, hi);
+      lines.push(c(`minImageCount = ${req}`));
+    }
+    B = req; fenceGate = true; imgGate = 'cpu';
+    lines.push(`→ Before acquiring, the CPU waits for the GPU work of the frame ${B} back` + (wg ? ' (wgpu rotates one acquire semaphore per image)' : ''));
+    if (wg && (pm==='fifo' || pm==='relaxed')) lines.push(`→ On Windows in FIFO modes, wgpu also waits on the acquire fence, so the CPU blocks until the image is free`);
+    assume.push(`Device ${c('minImageCount')} is ${lo}, and the driver creates exactly as many images as requested`);
+    assume.push(`${c('vkAcquireNextImageKHR')} blocks the CPU until an image is free (the spec leaves this to the driver)`);
+    if (!wg) assume.push(`The app keeps one frame in flight per image`);
+  } else {
+    if (wg){
+      const L = clamp(S.L,1,2); B = L+1;
+      lines.push(c(`desired_maximum_frame_latency = ${S.L}`) + (L!==S.L ? ` → clamped to ${L}` : ''));
+      lines.push(`→ ${c(`maximumDrawableCount = ${B}`)} (latency + 1)`);
+    } else { B = S.mtl; lines.push(c(`maximumDrawableCount = ${B}`)); }
+    lines.push(`→ ${c('nextDrawable')} blocks the CPU until a drawable is free`);
+    imgGate = 'cpu';
+  }
+  const av = availability()[pm];
+  const vkName = {fifo:'FIFO', relaxed:'FIFO_RELAXED', latest:'FIFO_LATEST_READY', mailbox:'MAILBOX', immediate:'IMMEDIATE'};
+  const native = vk ? `VK_PRESENT_MODE_${vkName[pm]}_KHR`
+    : api==='dx12' ? {fifo:'Present(1, 0)', latest:'Present(0, 0)', immediate:'Present(0, DXGI_PRESENT_ALLOW_TEARING)'}[pm]
+    : {fifo:'displaySyncEnabled = true', immediate:'displaySyncEnabled = false'}[pm];
+  const wgName = api==='dx12' && pm==='latest' ? 'Mailbox' : {fifo:'Fifo', relaxed:'FifoRelaxed', mailbox:'Mailbox', immediate:'Immediate'}[pm];
+  let pl = wg ? `${c('PresentMode::'+wgName)} → ${c(native)}` : c(native);
+  if (wg && api==='dx12' && pm==='latest') pl += ' (wgpu calls this Mailbox; it behaves as FIFO latest ready)';
+  if (av===2) pl += ' · optional, depends on the driver';
+  if (api==='metal' && pm==='immediate') pl += ' · macOS only';
+  lines.push(pl);
+  if (S.mode==='dwm' && effPm()!==pm) lines.push(`→ Composed can't tear, so this behaves like ${PM_LABEL[effPm()]}`);
+  return {lines, assume, N, B, imgGate, fenceGate};
+}
+
+function simulate(cfg, span = S.span){
+  const T = 1000/S.hz, end = span*T, F = [];
+  const d = S.mode==='dwm' ? T : 0;   // composed: latched at vblank k, scanned out at k+1
+  const pm = effPm(), {N, B} = cfg;
+  // Per the Vulkan spec (and DXGI/Metal behave the same here), a discarded frame's image is reusable as soon as it is replaced.
+  const discFree = t => t;
+  // Presentation engine. A present reaches it when its GPU work finishes (arrival = gpuEnd).
+  // Latches occur at every vblank; arrivals are monotonic because the GPU queue is serial.
+  const doLatch = (st, apply) => {
+    const t = st.k*T; st.k++;
+    // FIFO relaxed: a vblank with nothing new after something has been shown means the next frame is late
+    if (!st.Q.length){ if (st.anyShown) st.missed = true; return; }
+    st.missed = false; st.anyShown = true;
+    const show = f => apply(f, {shown:true, rel:t, disp:t+d});
+    if (pm==='latest'){ const last = st.Q.pop(); st.Q.forEach(f=>apply(f,{shown:false, rel:t, by:last.i})); st.Q = []; show(last); }
+    else show(st.Q.shift());
+  };
+  const doArrival = (st, f, apply) => {
+    if (pm==='immediate' || (pm==='relaxed' && st.missed && !st.Q.length)){
+      st.missed = false; st.anyShown = true;
+      apply(f, {shown:true, rel:f.gpuEnd, disp:f.gpuEnd, tear:true}); return;
+    }
+    if (pm==='mailbox'){ st.Q.forEach(q=>apply(q,{shown:false, rel:f.gpuEnd, by:f.i})); st.Q = []; }
+    st.Q.push(f);
+  };
+  const advance = (st, t, apply) => { while (st.k*T < t - 1e-9) doLatch(st, apply); };
+  const real = (f, r) => Object.assign(f, r);
+  const st = {Q:[], k:0, missed:false, anyShown:false};
+  // Projections below assume no further arrivals. That is safe: the frame asking cannot
+  // arrive before it is acquired, which is after the event it waits for.
+  const retireOf = j => {
+    if (j.rel !== undefined) return j.rel;
+    const c = {...st, Q:[...st.Q]}; let r;
+    for (let g=0; g<10000 && r===undefined; g++) doLatch(c, (f,res)=>{ if (f===j) r = res.rel; });
+    return r ?? Infinity;
+  };
+  // When frame j gives its image back: at discard if discarded, otherwise when the next shown frame replaces it.
+  const releaseOf = j => {
+    const look = get => {
+      const r = get(j); if (!r) return undefined;
+      if (r.shown===false) return discFree(r.rel);
+      for (let k=j.i+1; k<F.length; k++){ const x = get(F[k]); if (!x) return undefined; if (x.shown) return x.rel; }
+      return Infinity;
+    };
+    let r = look(f => f.rel!==undefined ? f : null);
+    if (r!==undefined) return r;
+    const c = {...st, Q:[...st.Q]}, tmp = new Map(), get = f => f.rel!==undefined ? f : (tmp.get(f) || null);
+    for (let g=0; g<10000; g++){
+      if (!c.Q.length) return Infinity;
+      doLatch(c, (f,res)=>tmp.set(f,res));
+      r = look(get); if (r!==undefined) return r;
+    }
+    return Infinity;
+  };
+  const imgs = new Array(B).fill(null);
+  let deadlock = false;
+  for (let i=0;i<5000;i++){
+    const prev = F[i-1];
+    const ready = prev ? prev.cpuEnd : 0;                          // loop iteration begins
+    const semG = N && i>=N ? retireOf(F[i-N]) : 0;                 // DXGI waitable
+    const fenG = cfg.fenceGate && i>=B ? F[i-B].gpuEnd : 0;        // GPU work of the frame B back
+    let slot = 0, imgFree = Infinity;                              // earliest image to come free
+    imgs.forEach((h,k)=>{ const t = h ? releaseOf(h) : 0; if (t < imgFree - 1e-9){ imgFree = t; slot = k; } });
+    if (!Number.isFinite(imgFree)){ deadlock = true; break; }
+    const imgCpu = cfg.imgGate==='cpu' ? imgFree : 0;
+    const cpuStart = Math.max(ready, semG, fenG, imgCpu);
+    if (cpuStart > end) break;
+    const waitedFor = cpuStart <= ready + 1e-6 ? null : semG >= cpuStart - 1e-6 ? 'sem' : imgCpu >= cpuStart - 1e-6 ? 'img' : 'fence';
+    const sample = S.input==='before' ? ready : cpuStart;
+    const cpuEnd = cpuStart + S.cpu;
+    const gpuReady = Math.max(cpuEnd, prev ? prev.gpuEnd : 0);
+    const gpuStart = Math.max(gpuReady, cfg.imgGate==='gpu' ? imgFree : 0);
+    const gpuEnd = gpuStart + S.gpu;
+    const f = {i, ready, sample, cpuStart, cpuEnd, gpuReady, gpuStart, gpuEnd, img:slot, imgFree, waitedFor, imgPrev: imgs[slot] ? imgs[slot].i : null};
+    imgs[slot] = f;
+    F.push(f);
+    advance(st, gpuEnd, real); doArrival(st, f, real);
+  }
+  while (st.Q.length && st.k*T < end + 8*T) doLatch(st, real);
+  F.forEach(f=>{ if (f.rel===undefined){ f.rel = Infinity; f.shown = false; f.pending = true; } });
+  const SF = F.filter(f=>f.shown);
+  SF.forEach((f,k)=>{ f.off = SF[k+1] ? SF[k+1].disp : Infinity; f.win = k ? SF[k-1].sample : 0; f.hasPrev = k>0; });
+  F.forEach(f=>{ f.freeAt = f.pending ? Infinity : !f.shown ? discFree(f.rel) : Infinity; });
+  SF.forEach((f,k)=>{ if (SF[k+1]) f.freeAt = SF[k+1].rel; });
+  return {F,SF,T,end,pm,cfg,deadlock};
+}
+
+const L = {vs:24, dim:28, in:24, cpu:34, gpu:34, q:40, dwm:34, disp:48, img:52};
+let LANES = [];
+function buildLanes(cfg){
+  LANES = [['vs','Vsync'],['dim','Latency'],['in','Input'],['cpu','CPU'],['gpu','GPU'],['q','Queue'],['dwm','Compositor'],['disp','Display']];
+  LANES.push(['img', IMG_LANE[S.api]]);
+}
+function laneY(){ let y=0; const o={}; for (const [k] of LANES){ o[k]=y; y+=L[k]; } o.total=y; return o; }
+
+// Lane key entries: swatch and text, by lane.
+const BLOCKED = [`<svg width="20" height="10"><rect width="20" height="10" fill="var(--grid)" stroke="var(--border)"/></svg>`, `Blocked: CPU or GPU waiting`];
+const KEY = {
+  dim: [[`<svg width="28" height="10"><line x1="0" x2="12" y1="5" y2="5" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="3 3"/><line x1="12" x2="28" y1="5" y2="5" stroke="var(--accent)" stroke-width="2"/></svg>`, `Latency: dashed = waiting to be read, solid = read → display`]],
+  in: [[`<svg width="14" height="14"><line x1="3" x2="3" y1="1" y2="13" stroke="var(--muted)" opacity=".6"/><line x1="10" x2="10" y1="1" y2="13" stroke="var(--accent)" stroke-width="2"/></svg>`, `Input read (highlighted frame in blue)`],
+    [`<svg width="20" height="10"><rect width="20" height="10" style="fill:color-mix(in srgb, var(--f0) 55%, var(--bg))"/></svg>`, `Input window: events here are read by that frame`]],
+  cpu: [BLOCKED],
+  gpu: [BLOCKED, [`<svg width="22" height="12"><rect width="22" height="12" rx="2" fill="var(--f1)" opacity=".35"/><line x1="3" y1="10" x2="19" y2="2" stroke="var(--fg)" stroke-width="1.5" opacity=".7"/></svg>`, `Rendered but discarded, never shown`]],
+  q: [[`<svg width="22" height="14"><rect x="0" y="8" width="22" height="5" rx="1" fill="var(--f0)"/><rect x="8" y="1" width="14" height="5" rx="1" fill="var(--f1)"/></svg>`, `Queue: rendered frames waiting for the display, oldest at the bottom`]],
+  dwm: [[`<svg width="20" height="10"><rect width="20" height="10" rx="2" fill="var(--f2)"/></svg>`, `Compositor: frame latched at a vblank, shown one refresh later`]],
+  disp: [[`<svg width="20" height="10"><rect x="1" y="1" width="18" height="8" fill="none" stroke="var(--fg)" stroke-width="2"/></svg>`, `Shown for more than one refresh`],
+    [`<svg width="16" height="14"><rect x="0" y="0" width="16" height="6" fill="var(--f0)"/><rect x="0" y="6" width="16" height="8" fill="var(--f1)"/><line x1="0" x2="16" y1="6" y2="6" stroke="var(--fg)" stroke-width="2"/></svg>`, `Tear: display lane columns show each refresh's image top to bottom`]],
+  img: [[`<svg width="22" height="14"><rect x="0" y="1" width="14" height="5" rx="1" fill="var(--f3)"/><rect x="6" y="8" width="16" height="5" rx="1" fill="var(--f4)"/></svg>`, `Images: which frame holds each swapchain image`]],
+};
+const laneKeyHtml = ([k,n]) => (KEY[k]||[]).map(([svg,t])=>`<div>${svg}${t}</div>`).join('') + explain('lane-'+n.toLowerCase());
+
+let sim, X, Y, laneHover = null, lanePin = null;
+// The frame traced when none is selected: the sixth one shown, which is past the startup frames.
+const defaultFrame = () => { const f = sim.SF[5]; return f && f.disp<sim.end ? f.i : null; };
+
+function render(){
+  const cfg = resolve();
+  $('resolved').innerHTML = cfg.lines.map(l=>`<li>${l}</li>`).join('') + cfg.assume.map(a=>`<li class="assume"><b>Assumed:</b> ${a}</li>`).join('');
+  sim = simulate(cfg); buildLanes(cfg); Y = laneY();
+  const {F,T,end,pm} = sim, comp = S.mode==='dwm';
+  const avail = $('scroller').clientWidth || 800;
+  const px = Math.max(avail/end, 36/T);
+  const W = Math.ceil(end*px - 1e-6) > avail ? Math.ceil(end*px)+1 : avail; X = t => t*px;
+  const fill = i => `var(--f${i%HUES})`;
+  const rowH = Math.min(11, (L.img-8)/sim.cfg.B);   // image lane rows shrink so that the lane height is fixed
+  let s = `<svg class="tl" id="tl" width="${W}" height="${Y.total}" viewBox="0 0 ${W} ${Y.total}">`;
+  LANES.forEach(([k],j)=>{ if (j) s += `<line x1="0" x2="${W}" y1="${Y[k]}" y2="${Y[k]}" stroke="var(--grid)"/>`; });
+  const every = Math.ceil(52/(T*px));
+  for (let k=0;k<=S.span;k++){
+    const xx = Math.min(X(k*T), W-.5);
+    s += `<line x1="${xx}" x2="${xx}" y1="0" y2="${Y.total}" stroke="var(--border)"/>`;
+    if (k%every===0 && k<S.span) s += `<text x="${xx+4}" y="16">${fmt(k*T)} ms</text>`;
+  }
+  if (!comp){
+    const my = Y.dwm + L.dwm/2;
+    s += `<rect x="0" y="${Y.dwm+1}" width="${W}" height="${L.dwm-1}" fill="var(--grid)" opacity=".6"/>`;
+    s += `<text class="lane-note" x="8" y="${my+4}">Skipped: the app's ${IMG_WORD[S.api]} goes straight to scanout</text>`;
+  }
+  if (sim.deadlock) s += `<text class="lane-note" x="8" y="${Y.cpu+L.cpu/2+4}" style="fill:var(--warn);font-weight:600">Stalled: no ${IMG_WORD[S.api]} can come free</text>`;
+  const box = (k,a,b,f,{extra='',label=true}={}) => {
+    const x0=X(a), w=Math.max(X(b)-x0,1), y0=Y[k]+6, h=L[k]-12;
+    const t = label && w>18 ? `<text x="${x0+w/2}" y="${y0+h/2+4}" text-anchor="middle">${f.i}</text>` : '';
+    return `<rect x="${x0}" y="${y0}" width="${w}" height="${h}" rx="2" fill="${fill(f.i)}" ${extra}/>${t}`;
+  };
+  const blocked = (k,a,b) => `<rect x="${X(a)}" y="${Y[k]+12}" width="${Math.max(X(Math.min(b,end))-X(a),1)}" height="${L[k]-24}" fill="var(--grid)" stroke="var(--border)"/>`;
+  // Display lane: each refresh column is the image scanned out that refresh, top of screen at the top.
+  // A frame that flips mid-refresh only covers the screen below the scanline at that moment (a tear).
+  const extra = {}, add = (i,str) => { extra[i] = (extra[i]||'') + str; };
+  const SF = sim.SF, dy0 = Y.disp+5, DH = L.disp-10;
+  let tears = '', run = null, j = -1;
+  const flush = () => {
+    if (!run) return;
+    const f = run.f, held = pm!=='immediate' && Number.isFinite(f.off) && (f.off-f.disp) > T*1.5;
+    const x0 = X(run.a), w = Math.max(X(run.b)-x0,1);
+    add(f.i, `<rect x="${x0}" y="${dy0}" width="${w}" height="${DH}" rx="2" fill="${fill(f.i)}" ${held?'style="stroke:var(--fg);stroke-width:2"':''}/>` + (w>18 ? `<text x="${x0+w/2}" y="${dy0+DH/2+4}" text-anchor="middle">${f.i}</text>` : ''));
+    run = null;
+  };
+  for (let k=0;k<S.span;k++){
+    const s0 = k*T, e0 = (k+1)*T;
+    while (j+1<SF.length && SF[j+1].disp <= s0+1e-6) j++;
+    const parts = []; let cur = j>=0 ? SF[j] : null, from = 0, jj = j;
+    while (jj+1<SF.length && SF[jj+1].disp < e0-1e-6){ jj++; const fr = (SF[jj].disp-s0)/T; parts.push([cur,from,fr]); cur = SF[jj]; from = fr; }
+    parts.push([cur,from,1]);
+    if (parts.length===1){
+      const f = parts[0][0];
+      if (!f){ flush(); continue; }
+      if (run && run.f===f) run.b = e0; else { flush(); run = {f, a:s0, b:e0}; }
+      continue;
+    }
+    flush();
+    const cx = X(s0), cw = X(e0)-cx;
+    parts.forEach(([f,a,b],idx)=>{
+      const ya = dy0+a*DH, h = (b-a)*DH;
+      if (f){
+        add(f.i, `<rect x="${cx}" y="${ya}" width="${cw}" height="${Math.max(h,0.5)}" fill="${fill(f.i)}"/>` + (cw>18 && h>=12 ? `<text x="${cx+cw/2}" y="${ya+h/2+4}" text-anchor="middle">${f.i}</text>` : ''));
+      }
+      if (idx>0) tears += `<line x1="${cx}" x2="${cx+cw}" y1="${ya}" y2="${ya}" stroke="var(--fg)" stroke-width="2"/>`;
+    });
+  }
+  flush();
+  // Present queue: frames done on the GPU, waiting to be dequeued (flip or compositor latch). Oldest in the bottom slot.
+  const qf = F.filter(f=>f.rel > f.gpuEnd + 1e-6 && f.gpuEnd < end);
+  const bnd = [...new Set(qf.flatMap(f=>[f.gpuEnd, Math.min(f.rel,end)]))].sort((a,b)=>a-b);
+  const qseg = {};
+  for (let k=0;k<bnd.length-1;k++){
+    const a = bnd[k], b = bnd[k+1], mid = (a+b)/2;
+    qf.filter(f=>f.gpuEnd<=mid && f.rel>mid).sort((x,y)=>x.gpuEnd-y.gpuEnd).forEach((f,slot)=>{
+      const segs = qseg[f.i] || (qseg[f.i] = []), last = segs[segs.length-1];
+      if (last && last[2]===slot && Math.abs(last[1]-a)<1e-9) last[1] = b; else segs.push([a,b,slot]);
+    });
+  }
+  F.forEach(f=>{
+    let g = '';
+    const dropped = f.shown===false && !f.pending;
+    if (f.shown && f.win < end) g += `<rect x="${X(f.win)}" y="${Y.in+6}" width="${Math.max(X(Math.min(f.sample,end))-X(f.win),1)}" height="${L.in-12}" style="fill:color-mix(in srgb, var(--f${f.i%HUES}) 55%, var(--bg))"/>`;
+    if (f.cpuStart > f.ready + 1e-6) g += blocked('cpu', f.ready, f.cpuStart);
+    if (f.cpuStart < end) g += box('cpu', f.cpuStart, Math.min(f.cpuEnd,end), f);
+    if (f.gpuStart > f.gpuReady + 1e-6 && f.gpuReady < end) g += blocked('gpu', f.gpuReady, f.gpuStart);
+    if (f.gpuStart < end){
+      g += box('gpu', f.gpuStart, Math.min(f.gpuEnd,end), f, {extra: dropped ? 'opacity=".35"' : ''});
+      if (dropped){
+        // rendered but never shown: struck through on its own GPU box
+        const x0 = X(f.gpuStart)+3, x1 = X(Math.min(f.gpuEnd,end))-3, y0 = Y.gpu+9, y1 = Y.gpu+L.gpu-9;
+        if (x1 > x0) g += `<line x1="${x0}" y1="${y1}" x2="${x1}" y2="${y0}" stroke="var(--fg)" stroke-width="1.5" opacity=".7"/>`;
+      }
+    }
+    (qseg[f.i]||[]).forEach(([a,b,slot])=>{
+      const y = Y.q + L.q - 5 - (slot+1)*8 + 2;
+      g += `<rect x="${X(a)}" y="${y}" width="${Math.max(X(b)-X(a),1)}" height="6" rx="1" fill="${fill(f.i)}" ${dropped ? 'opacity=".35"' : ''}/>`;
+    });
+    if (comp && f.shown && f.rel < end){
+      // the compositor latches the frame at a vblank and holds it for whole refreshes; scanout follows one refresh later
+      g += box('dwm', f.rel, Math.min(Number.isFinite(f.off) ? f.off - T : end, end), f);
+    }
+    if (extra[f.i]) g += extra[f.i];
+    // image ownership: from when the image is usable by this frame until it is given back
+    const ia = Math.max(f.cpuStart, f.imgFree), ib = Math.min(f.freeAt, end);
+    if (ia < end && ib > ia) g += `<rect x="${X(ia)}" y="${Y.img+4+f.img*rowH}" width="${Math.max(X(ib)-X(ia),1)}" height="${rowH-3}" rx="1" fill="${fill(f.i)}" ${dropped ? 'opacity=".35"' : ''}/>`;
+    s += `<g class="fr" data-f="${f.i}">${g}</g>`;
+  });
+  if (rowH > 9) for (let k=0;k<sim.cfg.B;k++) s += `<text x="4" y="${Y.img+12+k*rowH}" style="font-size:9px">${k}</text>`;
+  // input-read ticks in their own pass so no later input window paints over them
+  F.forEach(f=>{ if (f.sample <= end){ const sx=X(f.sample); s += `<g class="fr" data-f="${f.i}"><line class="tick" x1="${sx}" x2="${sx}" y1="${Y.in+5}" y2="${Y.in+L.in-5}"/></g>`; } });
+  s += `<g pointer-events="none">${tears}</g>`;
+  s += `<g id="dimg"></g></svg>`;
+  $('scroller').innerHTML = s;
+  $('lanes').innerHTML = LANES.map(([k,n])=>`<div style="height:${L[k]}px"${k==='dwm'&&!comp?' class="skipped"':''}>${laneKeyHtml([k,n]) ? `<button data-k="${k}">${n}</button>` : n}</div>`).join('');
+  laneKey();
+  const tl = $('tl');
+  // Hover traces only with a mouse. With touch, a tap pins.
+  tl.addEventListener('pointerover', e=>{ const g=e.target.closest('.fr'); if(g && e.pointerType==='mouse'){ S.hover=+g.dataset.f; trace(); }});
+  tl.addEventListener('pointerleave', ()=>{ S.hover=null; trace(); });
+  tl.addEventListener('click', e=>{ const g=e.target.closest('.fr'); S.pin = g && S.pin!==+g.dataset.f ? +g.dataset.f : null; trace(); });
+  chars(); trace();
+}
+
+function laneKey(){
+  const k = laneHover ?? lanePin, lane = LANES.find(l=>l[0]===k), el = $('laneKey');
+  document.querySelectorAll('#lanes button').forEach(b=>b.setAttribute('aria-expanded', b.dataset.k===lanePin));
+  el.hidden = !lane;
+  if (!lane) lanePin = null;
+  else { el.style.top = el.previousElementSibling.offsetTop+Y[k]+L[k]/2+'px'; el.innerHTML = laneKeyHtml(lane); }
+}
+
+function trace(){
+  const explicit = S.hover ?? S.pin, id = explicit ?? defaultFrame(), tl = $('tl');
+  tl.classList.toggle('focus', explicit!=null);
+  const f = id!=null ? sim.F[id] : null, dg = $('dimg');
+  // replacement chain: f was replaced by a, a by b, ... until a frame that was actually shown
+  const chain = [];
+  for (let c = f; c && c.shown===false && c.by!=null; ) { c = sim.F[c.by]; chain.push(c); }
+  const killer = chain[0] || null, survivor = chain.length && chain[chain.length-1].shown ? chain[chain.length-1] : null;
+  const lit = new Set([id, ...chain.map(c=>c.i)]);
+  tl.querySelectorAll('.fr').forEach(g=>g.classList.toggle('on', lit.has(+g.dataset.f)));
+  $('readoutBox').hidden = !f;
+  if (!f){ dg.innerHTML=''; return; }
+  const comp = S.mode==='dwm', word = IMG_WORD[S.api];
+  $('readoutSum').innerHTML = `<b>Frame ${f.i}</b>${f.shown ? '' : f.pending ? ' · still queued at end of window' : ' · discarded'}`;
+  const acq = (S.api==='dx12' ? 'Waitable acquired' : S.api==='metal' ? 'Drawable acquired' : 'Image acquired') +
+    (f.waitedFor==='sem' ? ' (waited on the waitable)'
+      : f.waitedFor==='img' ? ` (waited for ${word} ${f.img} to be freed by frame ${f.imgPrev})`
+      : f.waitedFor==='fence' ? ` (waited for frame ${f.i - sim.cfg.B}'s GPU work)` : '');
+  const gpuWait = f.gpuStart > f.gpuReady + 1e-6 ? ` (waited for ${word} ${f.img} to be freed by frame ${f.imgPrev})` : '';
+  const rows = [
+    ['Loop iteration starts', f.ready],
+    // ties keep this order (stable sort), so list the steps in program order for the chosen sampling point
+    ...(S.input==='after' ? [[acq, f.cpuStart], ['Input read', f.sample]] : [['Input read', f.sample], [acq, f.cpuStart]]),
+    ['CPU work ends (Present)', f.cpuEnd],
+    ['GPU work starts' + gpuWait, f.gpuStart],
+    ['GPU work ends', f.gpuEnd],
+  ];
+  if (f.shown){
+    const xw = X(f.win), x0 = X(f.sample), x1 = X(Math.min(f.disp,sim.end)), y = Y.dim+L.dim-9;
+    const tick = xx => `<line x1="${xx}" x2="${xx}" y1="${y-5}" y2="${y+5}" stroke="var(--accent)" stroke-width="1.5"/>`;
+    let carets = '';
+    if (S.pin === id){
+      const n = Math.max(2, Math.min(8, Math.floor((x0-xw)/16)));
+      for (let j=0;j<n;j++){ const cx = xw + (x0-xw)*(j+0.5)/n; carets += `<path d="M${cx-4},${Y.in+2} L${cx+4},${Y.in+2} L${cx},${Y.in+9} Z" fill="var(--accent)"/>`; }
+    }
+    dg.innerHTML = `
+      <line x1="${xw}" x2="${x0}" y1="${y}" y2="${y}" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="3 3"/>
+      <line x1="${x0}" x2="${x1}" y1="${y}" y2="${y}" stroke="var(--accent)" stroke-width="2"/>
+      ${tick(xw)}${tick(x0)}${tick(x1)}
+      <text x="${(xw+x1)/2}" y="${y-8}" text-anchor="middle" style="fill:var(--accent);font-weight:600;paint-order:stroke;stroke:var(--bg);stroke-width:4px">${fmt(f.disp-f.win)} ms</text>
+      ${carets}`;
+    rows.unshift(['Input window opens (previous shown frame read input)', f.win]);
+    rows.push([sim.pm==='immediate' || f.tear ? 'Dequeued (immediately, tears)' : comp ? 'Dequeued (compositor latch)' : 'Dequeued (flip)', f.rel]);
+    rows.push(['On screen', f.disp, true], ['Replaced on screen', f.off], [`${word[0].toUpperCase()+word.slice(1)} ${f.img} freed`, f.freeAt]);
+  } else {
+    // One arrow: from what ended up on screen instead, back to this frame. Intermediate replacements are only highlighted.
+    let out = '';
+    if (survivor && survivor.disp < sim.end){
+      // elbow route: up from the survivor's box, along the gap under the GPU lane, up into this frame's GPU box
+      const sx = X(comp ? survivor.rel : survivor.disp) + 6, sy0 = comp ? Y.dwm+6 : Y.disp+5;
+      const gx = (X(f.gpuStart) + X(f.gpuEnd))/2, gy = Y.gpu+L.gpu-6, my = gy+8, r = 3, dir = gx < sx ? -1 : 1;
+      const d = Math.abs(gx-sx) < 2*r
+        ? `M${sx},${sy0} V${my} H${gx} V${gy+4}`
+        : `M${sx},${sy0} V${my+r} Q${sx},${my} ${sx+dir*r},${my} H${gx-dir*r} Q${gx},${my} ${gx},${my-r} V${gy+4}`;
+      const label = `replaced by ${chain.map(c=>c.i).join(', ')}`;
+      out = `<path d="${d}" stroke="var(--warn)" stroke-width="1.5" fill="none"/><path d="M${gx-3.5},${gy+4.5} L${gx},${gy} L${gx+3.5},${gy+4.5} Z" fill="var(--warn)"/>
+        <text x="${sx + dir*4}" y="${my+14}" text-anchor="${dir<0 ? 'end' : 'start'}" style="fill:var(--warn);font-weight:600;paint-order:stroke;stroke:var(--bg);stroke-width:4px">${label}</text>`;
+    }
+    dg.innerHTML = out;
+    if (!f.pending){
+      rows.push([`Discarded (replaced by frame ${killer ? killer.i : '?'})`, f.rel]);
+      rows.push([`${word[0].toUpperCase()+word.slice(1)} ${f.img} freed`, f.freeAt]);
+    }
+    chain.forEach((c,k)=>{
+      rows.push([`Frame ${c.i} GPU work ends${k ? ` (replaces ${chain[k-1].i})` : ''}`, c.gpuEnd]);
+      if (c.shown) rows.push([`Frame ${c.i} on screen`, c.disp]);
+    });
+  }
+  rows.sort((a,b)=>a[1]-b[1]);
+  $('readout').innerHTML = rows.map(([n,t,k])=>{ const d = t - f.sample; return `<tr><td>${n}</td><td>${fmt(t,2)}</td><td class="${k?'lat':d<0?'dim':''}">${Number.isFinite(t)?(d>=0?'+':'')+fmt(d,2):'—'}</td></tr>`; }).join('');
+}
+
+function chars(){
+  // Results use a longer run than the chart shows, so the averages do not depend on where the window starts and ends.
+  const {F,SF} = simulate(sim.cfg, 1200), end = F.length ? F[F.length-1].cpuStart : 0;
+  const ss = SF.filter(f=>f.hasPrev && f.disp>=end/2 && Number.isFinite(f.off) && f.off<=end);
+  const st = a => a.length ? [Math.min(...a), a.reduce((p,c)=>p+c,0)/a.length, Math.max(...a)] : [NaN,NaN,NaN];
+  // Input events arrive uniformly; an event after the previous shown frame's read is picked up by the next shown frame.
+  let eMin=Infinity, eMax=-Infinity;
+  ss.forEach(f=>{ const D = f.sample - f.win, l = f.disp - f.sample; eMin=Math.min(eMin,l); eMax=Math.max(eMax,l+D); });
+    const per = st(ss.map(f=>f.off-f.disp));
+  const rf = F.filter(f=>f.i>0 && f.cpuStart>=end/2 && f.cpuStart<=end);
+  const rper = st(rf.map(f=>f.gpuEnd-F[f.i-1].gpuEnd));   // a frame counts as rendered when its GPU work ends
+  const done = rf.filter(f=>!f.pending);
+  const disc = done.length ? done.filter(f=>!f.shown).length/done.length*100 : NaN;
+  const avg = a => a.length ? a.reduce((p,c)=>p+c,0)/a.length : NaN;
+  const rows = [
+    ['Input latency', `${fmt(eMin)} – ${fmt(eMax)} ms`, 'latency'],
+    ['Input read → on screen', `${fmt(avg(ss.map(f=>f.disp-f.sample)))} ms`, 'read'],
+    ['Displayed frame rate', `${fmt(1000/per[1])} fps`, 'displayed'],
+    ['Rendered frame rate', `${fmt(1000/rper[1])} fps`, 'rendered'],
+    ['Frames discarded', `${fmt(disc,0)} %`, 'discarded'],
+    ['CPU busy', `${fmt(rf.length ? Math.min(100, S.cpu/rper[1]*100) : NaN, 0)} %`, 'cpu'],
+    ['GPU busy', `${fmt(rf.length ? Math.min(100, S.gpu/rper[1]*100) : NaN, 0)} %`, 'gpu'],
+  ];
+  $('chars').innerHTML = rows.map(([n,v,k])=>`<tr><td>${n}<div class="help">${explain('result-'+k)}</div></td><td class="typ">${v}</td></tr>`).join('');
+}
+
+function sync(){
+  const av = availability();
+  if (!av[S.pm]) S.pm = 'fifo';
+  const wg = S.iface==='wgpu', vk = isVk();
+  const off = (id,v) => $(id).classList.toggle('off', v);
+  off('kL', !wg); off('kDx', wg || S.api!=='dx12'); off('kVk', wg || !vk); off('kMtl', wg || S.api!=='metal');
+  const preset = PRESETS.find(([,,o])=>{ const want = {...DEFAULTS, ...o}; return Object.keys(DEFAULTS).every(k=>NOT_PRESET.includes(k) || S[k]===want[k]); })?.[0];
+  document.querySelectorAll('#presetSeg button').forEach((b,i)=>b.setAttribute('aria-pressed', PRESETS[i][0]===preset));
+  layer('presetHelp', preset); layer('pmHelp', S.pm);
+  document.querySelectorAll('#pmSeg button').forEach(b=>{
+    const a = av[b.dataset.v];
+    b.disabled = !a;
+    b.title = a ? '' : `Not available on ${API_LABEL[S.api]}${wg ? ' through wgpu' : ''}`;
+  });
+  $('page').classList.toggle('explain', S.explain);
+  $('explainBtn').setAttribute('aria-pressed', S.explain);
+  $('hz').value=S.hz; $('cpu').value=S.cpu; $('gpu').value=S.gpu; $('span').value=S.span;
+  $('hzOut').textContent = `${S.hz} Hz (${fmt(1000/S.hz,2)} ms)`;
+  $('cpuOut').textContent = `${fmt(S.cpu)} ms`; $('gpuOut').textContent = `${fmt(S.gpu)} ms`;
+  $('spanOut').textContent = `${S.span} refreshes`;
+  const press = (id,v) => document.querySelectorAll(`#${id} button`).forEach(b=>b.setAttribute('aria-pressed', b.dataset.v===String(v)));
+  press('apiSeg',S.api); press('ifSeg',S.iface); press('LSeg',S.L); press('nSeg',S.n); press('bSeg',S.bufs);
+  press('vkReqSeg',S.vkReq); press('mtlSeg',S.mtl); press('modeSeg',S.mode); press('inSeg',S.input); press('pmSeg',S.pm);
+  try { const {hover,pin,...save} = S; localStorage.setItem('swq4', JSON.stringify(save)); } catch(e){}
+}
+function update(){ S.pin=null; sync(); render(); }
+['hz','cpu','gpu','span'].forEach(k=>$(k).addEventListener('input',e=>{ S[k]=+e.target.value; update(); }));
+const seg = (id,key,num) => $(id).addEventListener('click',e=>{ const b=e.target.closest('button'); if(b && !b.disabled){ S[key]=num?+b.dataset.v:b.dataset.v; update(); }});
+// A change of interface carries the latency setting over to the closest value the other interface has.
+$('ifSeg').addEventListener('click',e=>{
+  const v = e.target.closest('button')?.dataset.v;
+  if (!v || v===S.iface) return;
+  if (v==='native'){ S.n = clamp(S.L,1,4); S.bufs = clamp(S.L+1,2,5); S.vkReq = clamp(S.L+1,3,5); S.mtl = clamp(S.L+1,2,3); }
+  else S.L = S.api==='dx12' ? S.n : (isVk() ? S.vkReq : S.mtl) - 1;
+  S.iface = v; update();
+});
+seg('apiSeg','api'); seg('LSeg','L',true); seg('nSeg','n',true); seg('bSeg','bufs',true);
+seg('vkReqSeg','vkReq',true); seg('mtlSeg','mtl',true); seg('modeSeg','mode'); seg('inSeg','input'); seg('pmSeg','pm');
+document.querySelectorAll('[data-explain]').forEach(e=>{ e.innerHTML = explain(e.dataset.explain); });
+$('explainBtn').hidden = !DRAFT && !$('explain').content.textContent.trim();
+$('explainBtn').addEventListener('click',()=>{ S.explain=!S.explain; sync(); });
+layers('presetHelp', 'preset-', PRESETS.map(p=>p[0])); layers('pmHelp', 'pm-', Object.keys(PM_LABEL));
+$('presetSeg').innerHTML = PRESETS.map(([,n])=>`<button>${n}</button>`).join('');
+$('presetSeg').addEventListener('click',e=>{
+  const i = [...e.currentTarget.children].indexOf(e.target.closest('button'));
+  if (i>=0){ Object.assign(S, DEFAULTS, PRESETS[i][2], {explain:S.explain}); update(); }
+});
+$('lanes').addEventListener('pointerover',e=>{ if (e.pointerType==='mouse'){ laneHover = e.target.closest('button')?.dataset.k ?? null; laneKey(); }});
+$('lanes').addEventListener('pointerleave',()=>{ laneHover = null; laneKey(); });
+// A click on a lane label toggles its key. A click outside the key, or Escape, closes it.
+addEventListener('keydown',e=>{ if (e.key==='Escape'){ lanePin = null; laneKey(); }});
+addEventListener('click',e=>{ if (e.target.closest('#laneKey')) return; const k = e.target.closest('#lanes button')?.dataset.k ?? null; lanePin = k===lanePin ? null : k; laneKey(); });
+// A phone toolbar that shows or hides changes only the height, which needs no redraw.
+let rz, lastW = innerWidth; addEventListener('resize',()=>{ if (innerWidth===lastW) return; lastW = innerWidth; clearTimeout(rz); rz=setTimeout(render,80); });
+sync(); render();
+</script>
+
+</body></html>
