@@ -48,7 +48,7 @@ td.typ{font-weight:600}
 .readout td.lat{color:var(--accent);font-weight:600}
 .readout td.dim{color:var(--muted)}
 .tl-wrap{display:flex;min-width:0;border:1px solid var(--border);border-radius:6px;overflow:hidden}
-.lanes{flex:none;width:84px;border-right:1px solid var(--border)}
+.lanes{flex:none;width:96px;border-right:1px solid var(--border)}
 .lanes div{display:flex;align-items:center;padding:0 10px;box-sizing:border-box;font-size:13px;font-weight:500}
 .scroller{overflow-x:auto;min-width:0;flex:1}
 svg{display:block}
@@ -75,11 +75,11 @@ svg text{font-family:var(--font);fill:var(--muted);font-size:11px}
 @media (min-width:1100px){.groups{grid-template-columns:1fr 2fr 1fr}}
 .group{border:1px solid var(--border);border-radius:6px;padding:12px 14px;align-content:start}
 .resolved ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:3px;font-size:13px}
-/* Lane key: opens beside the lane label that the reader points at or selects, 8px right of the 84px lane column. */
+/* Lane key: opens beside the lane label that the reader points at or selects, 8px right of the 96px lane column. */
 .lanes button{font:inherit;color:inherit;background:none;border:0;margin:0 -10px;padding:0 10px;width:calc(100% + 20px);height:100%;text-align:left;cursor:help;text-decoration:underline dotted var(--muted);text-underline-offset:3px}
 .lanes button:focus-visible{outline-offset:-2px}
 .tl-box{position:relative}
-.lane-key{position:absolute;left:92px;transform:translateY(-50%);z-index:1;box-sizing:border-box;max-width:min(420px,calc(100% - 100px));display:flex;flex-direction:column;gap:6px;padding:8px 12px;font-size:13px;background:var(--bg);border:1px solid var(--border);border-radius:6px;box-shadow:0 4px 12px rgb(0 0 0/.2)}
+.lane-key{position:absolute;left:104px;transform:translateY(-50%);z-index:1;box-sizing:border-box;max-width:min(420px,calc(100% - 112px));display:flex;flex-direction:column;gap:6px;padding:8px 12px;font-size:13px;background:var(--bg);border:1px solid var(--border);border-radius:6px;box-shadow:0 4px 12px rgb(0 0 0/.2)}
 .lane-key svg{display:inline-block;vertical-align:-2px;margin-right:6px}
 .resolved li{overflow-wrap:anywhere}
 .resolved li.assume{color:var(--muted)}
@@ -110,7 +110,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
 @media (max-width:700px) and (orientation:portrait){
   .timeline{display:contents}
   .tl-box{position:sticky;bottom:0;z-index:1;margin-inline:-16px;padding:8px 16px max(8px,env(safe-area-inset-bottom,0px));background:var(--bg);border-top:1px solid var(--border)}
-  .lane-key{left:108px;max-width:calc(100% - 124px);transform:translateY(-100%);margin-top:-14px}
+  .lane-key{left:120px;max-width:calc(100% - 136px);transform:translateY(-100%);margin-top:-14px}
   html{scroll-padding-bottom:350px}
 }
 @media (pointer:coarse){
